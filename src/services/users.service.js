@@ -1,4 +1,5 @@
 const prisma = require('../db');
+const { buildMeta } = require('../utils/pagination');
 
 async function createUser(data) {
   const { username, email, fullname, bio } = data;
@@ -28,11 +29,8 @@ async function createUser(data) {
   });
 }
 
-async function listUsers(query = {}) {
-  const page = query.page ? parseInt(query.page, 10) : 1;
-  let limit = query.limit ? parseInt(query.limit, 10) : 10;
-  if (limit > 50) limit = 50;
-
+async function listUsers(query = {}, pagination) {
+  const { page, limit, skip, take } = pagination;
   const sortBy = query.sortBy || 'createdAt';
   const order = query.order || 'desc';
 
@@ -46,9 +44,13 @@ async function listUsers(query = {}) {
       { fullname: { contains: query.search, mode: 'insensitive' } },
     ];
   }
-
-  const skip = (page - 1) * limit;
-  const take = limit;
+  if (query.hasPosts !== undefined) {
+    if (query.hasPosts === 'true') {
+      where.posts = { some: {} };
+    } else if (query.hasPosts === 'false') {
+      where.posts = { none: {} };
+    }
+  }
 
   const [users, total] = await prisma.$transaction([
     prisma.user.findMany({
@@ -60,16 +62,9 @@ async function listUsers(query = {}) {
     prisma.user.count({ where }),
   ]);
 
-  const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
-
   return {
     data: users,
-    meta: {
-      page,
-      limit,
-      total,
-      totalPages,
-    },
+    meta: buildMeta(page, limit, total),
   };
 }
 
@@ -79,6 +74,14 @@ async function getUserById(id) {
 
   return await prisma.user.findUnique({
     where: { id: userId },
+    include: {
+      _count: {
+        select: {
+          posts: true,
+          likes: true,
+        },
+      },
+    },
   });
 }
 

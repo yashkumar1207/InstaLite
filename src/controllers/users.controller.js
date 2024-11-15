@@ -1,14 +1,5 @@
 const usersService = require('../services/users.service');
-
-function isPositiveInteger(val) {
-  if (typeof val === 'number') {
-    return Number.isInteger(val) && val > 0;
-  }
-  if (typeof val === 'string') {
-    return /^[1-9]\d*$/.test(val.trim());
-  }
-  return false;
-}
+const { parsePagination } = require('../utils/pagination');
 
 async function create(req, res) {
   try {
@@ -29,14 +20,14 @@ async function create(req, res) {
 
 async function list(req, res) {
   try {
-    const { page, limit, sortBy, order, isPrivate, search } = req.query;
+    let pagination;
+    try {
+      pagination = parsePagination(req.query);
+    } catch (err) {
+      return res.status(err.status || 400).json({ error: err.message });
+    }
 
-    if (page !== undefined && !isPositiveInteger(page)) {
-      return res.status(400).json({ error: 'page and limit must be positive integers' });
-    }
-    if (limit !== undefined && !isPositiveInteger(limit)) {
-      return res.status(400).json({ error: 'page and limit must be positive integers' });
-    }
+    const { sortBy, order, isPrivate, search, hasPosts } = req.query;
 
     const allowedSortBy = ['createdAt', 'username', 'fullname'];
     if (sortBy !== undefined && !allowedSortBy.includes(sortBy)) {
@@ -52,7 +43,11 @@ async function list(req, res) {
       return res.status(400).json({ error: 'isPrivate must be true or false' });
     }
 
-    const result = await usersService.listUsers({ page, limit, sortBy, order, isPrivate, search });
+    if (hasPosts !== undefined && hasPosts !== 'true' && hasPosts !== 'false') {
+      return res.status(400).json({ error: 'hasPosts must be true or false' });
+    }
+
+    const result = await usersService.listUsers({ sortBy, order, isPrivate, search, hasPosts }, pagination);
     return res.status(200).json(result);
   } catch (error) {
     return res.status(500).json({ error: error.message });

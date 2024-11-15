@@ -1,14 +1,5 @@
 const postsService = require('../services/posts.service');
-
-function isPositiveInteger(val) {
-  if (typeof val === 'number') {
-    return Number.isInteger(val) && val > 0;
-  }
-  if (typeof val === 'string') {
-    return /^[1-9]\d*$/.test(val.trim());
-  }
-  return false;
-}
+const { parsePagination } = require('../utils/pagination');
 
 function isValidDate(val) {
   const d = new Date(val);
@@ -17,32 +8,45 @@ function isValidDate(val) {
 
 async function create(req, res) {
   try {
-    const { imageUrl, caption, location } = req.body;
-    if (!imageUrl) {
-      return res.status(400).json({ error: 'imageUrl is required' });
+    const { imageUrl, authorId, caption, location } = req.body;
+    if (!imageUrl || !authorId) {
+      return res.status(400).json({ error: 'imageUrl and authorId are required' });
     }
 
-    const post = await postsService.createPost({ imageUrl, caption, location });
+    const parsedAuthorId = parseInt(authorId, 10);
+    if (isNaN(parsedAuthorId)) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const post = await postsService.createPost({
+      imageUrl,
+      authorId: parsedAuthorId,
+      caption,
+      location,
+    });
     return res.status(201).json(post);
   } catch (error) {
+    if (error.status === 404 || error.code === 'P2003' || error.code === 'P2025') {
+      return res.status(404).json({ error: 'User not found' });
+    }
     return res.status(500).json({ error: error.message });
   }
 }
 
 async function list(req, res) {
   try {
-    const { page, limit, sortBy, order, location, search, from, to } = req.query;
-
-    if (page !== undefined && !isPositiveInteger(page)) {
-      return res.status(400).json({ error: 'page and limit must be positive integers' });
-    }
-    if (limit !== undefined && !isPositiveInteger(limit)) {
-      return res.status(400).json({ error: 'page and limit must be positive integers' });
+    let pagination;
+    try {
+      pagination = parsePagination(req.query);
+    } catch (err) {
+      return res.status(err.status || 400).json({ error: err.message });
     }
 
-    const allowedSortBy = ['createdAt', 'updatedAt'];
+    const { sortBy, order, location, search, from, to } = req.query;
+
+    const allowedSortBy = ['createdAt', 'updatedAt', 'likes'];
     if (sortBy !== undefined && !allowedSortBy.includes(sortBy)) {
-      return res.status(400).json({ error: 'sortBy must be one of: createdAt, updatedAt' });
+      return res.status(400).json({ error: 'sortBy must be one of: createdAt, updatedAt, likes' });
     }
 
     const allowedOrder = ['asc', 'desc'];
@@ -57,7 +61,7 @@ async function list(req, res) {
       return res.status(400).json({ error: 'from and to must be valid dates' });
     }
 
-    const result = await postsService.listPosts({ page, limit, sortBy, order, location, search, from, to });
+    const result = await postsService.listPosts({ sortBy, order, location, search, from, to }, pagination);
     return res.status(200).json(result);
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -101,10 +105,30 @@ async function remove(req, res) {
   }
 }
 
+async function getUserPosts(req, res) {
+  try {
+    let pagination;
+    try {
+      pagination = parsePagination(req.query);
+    } catch (err) {
+      return res.status(err.status || 400).json({ error: err.message });
+    }
+
+    const result = await postsService.listUserPosts(req.params.id, pagination);
+    return res.status(200).json(result);
+  } catch (error) {
+    if (error.status === 404) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    return res.status(500).json({ error: error.message });
+  }
+}
+
 module.exports = {
   create,
   list,
   getOne,
   update,
   remove,
+  getUserPosts,
 };
