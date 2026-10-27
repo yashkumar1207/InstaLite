@@ -1,0 +1,27 @@
+{
+  "name": "instalite",
+  "version": "1.0.0",
+  "description": "InstaLite backend API with Express and Prisma",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "seed": "prisma db seed"
+  },
+  "keywords": [],
+  "author": "yashkumar1207",
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "prisma": "^7.10.1"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  }
+}
