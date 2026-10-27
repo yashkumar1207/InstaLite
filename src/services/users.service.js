@@ -28,8 +28,49 @@ async function createUser(data) {
   });
 }
 
-async function listUsers() {
-  return await prisma.user.findMany();
+async function listUsers(query = {}) {
+  const page = query.page ? parseInt(query.page, 10) : 1;
+  let limit = query.limit ? parseInt(query.limit, 10) : 10;
+  if (limit > 50) limit = 50;
+
+  const sortBy = query.sortBy || 'createdAt';
+  const order = query.order || 'desc';
+
+  const where = {};
+  if (query.isPrivate !== undefined) {
+    where.isPrivate = query.isPrivate === 'true';
+  }
+  if (query.search) {
+    where.OR = [
+      { username: { contains: query.search, mode: 'insensitive' } },
+      { fullname: { contains: query.search, mode: 'insensitive' } },
+    ];
+  }
+
+  const skip = (page - 1) * limit;
+  const take = limit;
+
+  const [users, total] = await prisma.$transaction([
+    prisma.user.findMany({
+      where,
+      orderBy: { [sortBy]: order },
+      skip,
+      take,
+    }),
+    prisma.user.count({ where }),
+  ]);
+
+  const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+
+  return {
+    data: users,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages,
+    },
+  };
 }
 
 async function getUserById(id) {
